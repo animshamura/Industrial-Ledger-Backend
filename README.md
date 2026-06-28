@@ -17,6 +17,31 @@ Key capabilities:
 - Prometheus metrics via `django-prometheus`
 - OpenAPI schema and Swagger UI documentation
 
+## Architecture and system design
+
+The service is designed as a modular Django monolith with clearly separated domain and API layers.
+
+- `src/domains/ledger/` holds accounting models and transactional business logic.
+- `src/domains/webhooks/` stores outbox events and handles webhook delivery asynchronously.
+- `src/api/v1/` exposes REST resources and serialization for accounts, ledger entries, and transfers.
+- `config/` contains environment-specific Django settings, URL routing, and deployment integration.
+
+The core transfer workflow is:
+
+1. Client submits `POST /api/v1/transfers` with source and destination account IDs, amount, and `X-Idempotency-Key`.
+2. The API validates the request and forwards it to `LedgerTransferService`.
+3. The service loads both accounts using `select_for_update()` inside a transaction to prevent concurrent balance corruption.
+4. It debits one account and credits the other, then creates a `LedgerEntry` record.
+5. A webhook outbox record is created in the same transaction to guarantee delivery intent.
+6. Celery workers later consume outbox records and deliver webhook payloads, retrying failed deliveries.
+
+Design goals:
+
+- **Durability and consistency:** account balance updates and ledger entry creation occur inside a single atomic transaction.
+- **Idempotency:** ledger transfers are protected by a unique idempotency key recorded in the ledger entry.
+- **Observability:** Prometheus metrics and API schema documentation are exposed for monitoring and API discovery.
+- **Separation of concerns:** API, domain logic, and webhook delivery are separated into discrete packages.
+
 ## Repository structure
 
 - `config/` - Django settings, URLs, WSGI/ASGI entrypoints
