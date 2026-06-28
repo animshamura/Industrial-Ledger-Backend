@@ -1,0 +1,5 @@
+resources:
+  - postgres.yaml
+  - redis.yaml
+  - api.yaml
+  - celery.yaml

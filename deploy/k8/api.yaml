@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ledger-api
+  labels:
+    app: ledger-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ledger-api
+  template:
+    metadata:
+      labels:
+        app: ledger-api
+    spec:
+      containers:
+        - name: ledger-api
+          image: ledger-api:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: DJANGO_SETTINGS_MODULE
+              value: config.settings.base
+            - name: DB_HOST
+              value: postgres
+            - name: DB_NAME
+              value: ledger_prod
+            - name: DB_USER
+              value: postgres
+            - name: DB_PASSWORD
+              value: secure_password_here
+            - name: REDIS_URL
+              value: redis://redis:6379/0
+            - name: CELERY_BROKER_URL
+              value: redis://redis:6379/1
+          ports:
+            - containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health/
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health/
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 2
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ledger-api
+spec:
+  selector:
+    app: ledger-api
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+  type: ClusterIP

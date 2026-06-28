@@ -36,6 +36,11 @@ class LedgerTransferView(APIView):
             return Response({"error": f"Critical system exception: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class HealthCheckView(APIView):
+    def get(self, request, *args, **kwargs):
+        return Response({"status": "ok"}, status=status.HTTP_200_OK)
+
+
 class AccountListView(generics.ListAPIView):
     queryset = Account.objects.all().order_by('created_at')
     serializer_class = AccountSerializer

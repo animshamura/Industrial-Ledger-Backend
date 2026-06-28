@@ -1,45 +1,46 @@
 # Industrial Ledger Backend
 
-Industrial Ledger Backend is a high-throughput, double-entry ledger service implemented with Django, Django REST Framework, Celery, PostgreSQL, and Redis.
+Industrial Ledger Backend is a transactional, double-entry ledger service built with Django, Django REST Framework, Celery, PostgreSQL, and Redis.
 
 ## Overview
 
-This project provides a transactional ledger backend suitable for financial systems that require strong consistency, auditability, and reliable webhook delivery.
+This service is designed for systems that demand strong consistency, auditability, idempotent payments, and reliable webhook delivery.
 
-The core system supports:
-- REST-based ledger transfers with explicit debit and credit posting
-- Account listing and retrieval
-- Ledger entry listing and retrieval
-- Idempotent transfer requests via `X-Idempotency-Key`
-- Database locking via `select_for_update()` to prevent concurrent balance corruption
+Key features:
+- Transactional debit/credit ledger transfers
+- Account listing and retrieval APIs
+- Ledger entry listing and retrieval APIs
+- Idempotent transfer requests using `X-Idempotency-Key`
+- Database row locking with `select_for_update()` to prevent concurrent balance corruption
 - Webhook outbox persistence for deferred event delivery
-- Prometheus observability through `django-prometheus`
+- Prometheus metrics via `django-prometheus`
 - OpenAPI schema and Swagger UI documentation
+- Kubernetes and Docker Compose deployment examples
 
-## Architecture and system design
+## Architecture
 
-The application is structured as a modular Django service with clean separation between API, domain logic, and integration components.
+The project follows a modular service structure with a clear separation of concerns.
 
-- `src/domains/ledger/` contains ledger models and transactional business logic.
-- `src/domains/webhooks/` contains the webhook outbox model and asynchronous delivery behavior.
-- `src/api/v1/` exposes the REST API and serialization layer.
-- `config/` houses environment-specific settings, URL routing, and deployment configuration.
+- `src/domains/ledger/`: ledger models, validation, and transfer business logic
+- `src/domains/webhooks/`: webhook outbox persistence and Celery delivery processing
+- `src/api/v1/`: REST API views, serializers, and tests
+- `config/`: Django settings, URL routing, and environment configuration
 
 ### Transfer workflow
 
 1. Client submits `POST /api/v1/transfers` with source account, destination account, amount, and `X-Idempotency-Key`.
-2. The API layer validates the request and hands it off to `LedgerTransferService`.
-3. The service loads the account records with `select_for_update()` inside a transaction.
-4. It debits the source account, credits the destination account, and creates a `LedgerEntry`.
-5. A webhook outbox record is created in the same transaction to ensure delivery intent is persisted atomically.
-6. Celery workers later process outbox records and deliver webhook payloads, retrying failures as needed.
+2. The API validates the payload and forwards it to `LedgerTransferService`.
+3. The service loads accounts using `select_for_update()` inside a transaction.
+4. The source account is debited and the destination account is credited.
+5. A `LedgerEntry` and webhook outbox record are created in the same transaction.
+6. Celery workers later process outbox records and deliver webhook events.
 
 ### Design principles
 
-- **Consistency:** ledger transfers are executed in a single transactional boundary.
-- **Idempotency:** transfer requests are protected by a unique idempotency key.
-- **Observability:** API schema and Prometheus metrics are exposed for monitoring.
-- **Modularity:** API, ledger domain, and webhook delivery are separated into distinct components.
+- **Consistency:** transfers execute in one transactional boundary.
+- **Idempotency:** repeated transfer requests with the same key are safe.
+- **Observability:** API schema and Prometheus metrics are exposed.
+- **Modularity:** API, domain logic, and webhook delivery are separated.
 
 ## Architecture diagram
 
@@ -89,23 +90,24 @@ The application is structured as a modular Django service with clean separation 
 
 ## Repository structure
 
-- `config/` — Django settings, URL definitions, and environment configuration
+- `config/` — settings, URL routing, and deployment configuration
 - `src/api/v1/` — API views, serializers, and tests
-- `src/domains/ledger/` — ledger models, services, and transaction logic
-- `src/domains/webhooks/` — webhook outbox persistence and Celery delivery
+- `src/domains/ledger/` — ledger domain models and services
+- `src/domains/webhooks/` — webhook outbox persistence and Celery integration
 - `deploy/docker/django/Dockerfile.prod` — production Docker image build
-- `docker-compose.prod.yml` — sample deployment stack for PostgreSQL, Redis, Django, and Celery
+- `docker-compose.prod.yml` — production-style Docker Compose stack
+- `deploy/k8/` — Kubernetes manifests and `kustomization.yaml`
 
 ## Requirements
 
 - Python 3.11
-- Poetry (recommended) or equivalent dependency manager
-- PostgreSQL and Redis for production deployments
+- Poetry (recommended)
+- PostgreSQL and Redis for production
 - SQLite for local development
 
 ## Local development
 
-Local development uses `config/settings/local.py` with SQLite and in-memory caching.
+Local development uses `config.settings.local` with SQLite and in-memory caching.
 
 1. Install dependencies:
 
@@ -131,27 +133,43 @@ poetry run python -m django migrate
 poetry run python -m django runserver 0.0.0.0:8000
 ```
 
-> Note: This repository does not include `manage.py`; use `python -m django` with `DJANGO_SETTINGS_MODULE`.
+> This repository does not include `manage.py`; use `python -m django` with `DJANGO_SETTINGS_MODULE`.
 
-## Docker deployment
+## Docker Compose deployment
 
-To start the full production-style stack:
+Start the production-style local stack:
 
 ```bash
 docker compose -f docker-compose.prod.yml up --build
 ```
 
-This starts:
+Services started:
 - `postgres-primary` — PostgreSQL
-- `redis` — Redis cache and Celery broker
-- `api-gateway` — Django application
-- `celery-worker` — Celery worker
+- `redis` — Redis broker/cache
+- `api-gateway` — Django API
+- `celery-worker` — Celery task worker
 
 The API is available at `http://localhost:8000/`.
 
+## Kubernetes deployment
+
+A Kubernetes example is provided in `deploy/k8/`.
+
+Build the application image:
+
+```bash
+docker build -t ledger-api:latest -f deploy/docker/django/Dockerfile.prod .
+```
+
+Apply the manifests with Kustomize:
+
+```bash
+kubectl apply -k deploy/k8/
+```
+
 ## Environment variables
 
-Production settings use these variables:
+Production settings use:
 
 - `DJANGO_SETTINGS_MODULE=config.settings.base`
 - `DB_HOST` (default: `postgres-primary`)
@@ -164,6 +182,18 @@ Production settings use these variables:
 - `CELERY_RESULT_BACKEND` (recommended: `redis://redis:6379/2`)
 
 ## API Endpoints
+
+### Health
+
+`GET /api/v1/health/`
+
+Response:
+
+```json
+{
+  "status": "ok"
+}
+```
 
 ### Transfer
 
@@ -196,12 +226,12 @@ Success response:
 ### Account endpoints
 
 - `GET /api/v1/accounts/` — list accounts
-- `GET /api/v1/accounts/<uuid:id>/` — retrieve account details
+- `GET /api/v1/accounts/<uuid:id>/` — account details
 
 ### Ledger entry endpoints
 
 - `GET /api/v1/ledger-entries/` — list ledger entries
-- `GET /api/v1/ledger-entries/<uuid:id>/` — retrieve ledger entry details
+- `GET /api/v1/ledger-entries/<uuid:id>/` — ledger entry details
 
 ## Example requests
 
@@ -236,18 +266,18 @@ curl http://localhost:8000/api/v1/ledger-entries/<uuid>/
 
 ## Tests
 
-Run the Django test suite using local settings:
+Run tests with local settings:
 
 ```powershell
 $env:DJANGO_SETTINGS_MODULE='config.settings.local'
 poetry run python -m django test
 ```
 
-This project includes tests for transfer behavior, account endpoints, and ledger entry endpoints.
+The suite includes tests for transfer behavior, account endpoints, ledger entries, and health checks.
 
 ## Webhooks
 
-Transfer completion creates records in `src.domains.webhooks.models.outbox.WebhookOutbox`.
+Transfer completion creates webhook outbox records in `src/domains/webhooks/models/outbox.py`.
 
 Webhook delivery is processed asynchronously by Celery.
 
@@ -258,6 +288,9 @@ celery -A config worker --loglevel=info -Q webhooks
 ```
 
 ## Metrics
+
+Prometheus metrics are exposed through `django-prometheus` and can be scraped by an observability stack.
+
 
 `django-prometheus` provides application monitoring endpoints exposed by Django.
 
