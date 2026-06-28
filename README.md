@@ -57,11 +57,11 @@ The application is structured as a modular Django service with clean separation 
                  |            |
                  |            |
       +----------v--+      +-v-----------+
-      | Transfer    |      | Read        |
-      | service     |      | endpoints   |
-      | src/domains/|      | (accounts,  |
-      | ledger/     |      | ledger entries)
-      +------+------+
+      | Transfer    |      | Read           |
+      | service     |      | endpoints      |
+      | src/domains/|      | (accounts,     |
+      | ledger/     |      | ledger entries)|
+      +------+------+       +------+------+
              |
              v
     +--------+---------+
