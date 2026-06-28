@@ -6,6 +6,15 @@ from src.domains.ledger.models.journal import Account, LedgerEntry
 from src.domains.ledger.services.transfer import LedgerTransferService
 
 
+def dump_response(response, label=None):
+    try:
+        body = response.json()
+    except Exception:
+        body = response.content.decode('utf-8', errors='replace')
+    label_msg = f" [{label}]" if label else ""
+    print(f"\nRESPONSE{label_msg}: status={response.status_code} body={body}\n")
+
+
 class LedgerTransferAPITests(TestCase):
     def setUp(self):
         self.client = Client()
@@ -31,6 +40,7 @@ class LedgerTransferAPITests(TestCase):
             content_type="application/json",
         )
 
+        dump_response(response, "missing-idempotency")
         self.assertEqual(response.status_code, 400)
         self.assertIn("error", response.json())
 
@@ -46,6 +56,7 @@ class LedgerTransferAPITests(TestCase):
             HTTP_X_IDEMPOTENCY_KEY="api-test-key",
         )
 
+        dump_response(response, "transfer-success")
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()["status"], "AUTHORIZED")
 
@@ -67,6 +78,7 @@ class LedgerTransferAPITests(TestCase):
             HTTP_X_IDEMPOTENCY_KEY="api-test-key-2",
         )
 
+        dump_response(response, "invalid-amount")
         self.assertEqual(response.status_code, 400)
         self.assertIn("error", response.json())
 
@@ -82,17 +94,20 @@ class AccountEndpointsTests(TestCase):
 
     def test_account_list_returns_accounts(self):
         response = self.client.get("/api/v1/accounts/")
+        dump_response(response, "account-list")
         self.assertEqual(response.status_code, 200)
         self.assertIsInstance(response.json(), list)
         self.assertGreaterEqual(len(response.json()), 1)
 
     def test_account_detail_returns_account(self):
         response = self.client.get(f"/api/v1/accounts/{self.account.id}/")
+        dump_response(response, "account-detail")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["id"], str(self.account.id))
 
     def test_health_endpoint_returns_ok(self):
         response = self.client.get("/api/v1/health/")
+        dump_response(response, "health-check")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"status": "ok"})
 
@@ -120,11 +135,13 @@ class LedgerEntryEndpointsTests(TestCase):
 
     def test_ledger_entry_list_returns_entries(self):
         response = self.client.get("/api/v1/ledger-entries/")
+        dump_response(response, "ledger-entry-list")
         self.assertEqual(response.status_code, 200)
         self.assertIsInstance(response.json(), list)
         self.assertGreaterEqual(len(response.json()), 1)
 
     def test_ledger_entry_detail_returns_entry(self):
         response = self.client.get(f"/api/v1/ledger-entries/{self.entry.id}/")
+        dump_response(response, "ledger-entry-detail")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["id"], str(self.entry.id))

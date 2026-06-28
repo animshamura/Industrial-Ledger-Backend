@@ -273,6 +273,15 @@ $env:DJANGO_SETTINGS_MODULE='config.settings.local'
 poetry run python -m django test
 ```
 
+Sample test output includes response debug output for request status and JSON body:
+
+```text
+RESPONSE [transfer-success]: status=201 body={'transaction_id': '...', 'status': 'AUTHORIZED', 'message': 'Funds successfully captured and settled globally.'}
+RESPONSE [account-list]: status=200 body=[{...}]
+RESPONSE [health-check]: status=200 body={'status': 'ok'}
+...
+```
+
 The suite includes tests for transfer behavior, account endpoints, ledger entries, and health checks.
 
 ## Webhooks
