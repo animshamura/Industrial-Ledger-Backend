@@ -121,4 +121,4 @@ Prometheus endpoints are mounted through the project URL configuration and can b
 
 ## License
 
-Specify your license here.
+No license. 
