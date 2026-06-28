@@ -46,9 +46,11 @@ The application relies on these environment variables:
 - `CELERY_BROKER_URL` (default: `redis://redis:6379/1`)
 - `CELERY_RESULT_BACKEND` (recommended: `redis://redis:6379/2`)
 
-## Local Deployment with Docker Compose
+## Running the Code
 
-Start the service stack using Docker Compose:
+### Option 1: Run with Docker Compose
+
+Use the provided production-style compose file to start the full stack:
 
 ```bash
 docker compose -f docker-compose.prod.yml up --build
@@ -59,6 +61,22 @@ This brings up:
 - `redis` - Redis cache and Celery broker
 - `api-gateway` - Django app serving the ledger API
 - `celery-worker` - Celery worker processing webhook events
+
+After startup, the API is reachable on `http://localhost:8000/api/v1/transfers`.
+
+### Option 2: Run locally with Python
+
+If you prefer a local Python environment, install dependencies with Poetry and use Django's module runner.
+
+```bash
+poetry install
+set DJANGO_SETTINGS_MODULE=config.settings.base
+poetry run python -m django runserver 0.0.0.0:8000
+```
+
+If `poetry run python -m django` fails because `django` is not available in the environment, ensure `poetry install` completed successfully and that the current working directory is the repository root.
+
+Note: This repository does not include a `manage.py` file. Use `python -m django` with `DJANGO_SETTINGS_MODULE` instead.
 
 ## API Usage
 
