@@ -45,44 +45,46 @@ The application is structured as a modular Django service with clean separation 
 
 ```text
             +-----------------------------+
-            |        API Client           |
-            |  (web, mobile, integrations)|
+            |         API Client          |
+            |   (web, mobile, integration) |
             +-------------+---------------+
                           |
                           v
             +-------------+---------------+
             |  Django REST API / Views    |
-            |  src/api/v1/               |
-            +----+------------+----------+
-                 |            |
-                 |            |
-      +----------v--+      +-v-----------+
-      | Transfer    |      | Read        |
-      | service     |      | endpoints   |
-      | src/domains/|      | (accounts,  |
-      | ledger/     |      | ledger entries)
-      +------+------+
-             |
-             v
-    +--------+---------+
-    | PostgreSQL DB     |
-    | - Account         |
-    | - LedgerEntry     |
-    | - idempotency key |
-    +--------+---------+
-             |
-             v
-    +------------------+
-    | Webhook outbox   |
-    | src/domains/     |
-    | webhooks/        |
-    +---------+--------+
-              |
-              v
-    +------------------+
-    | Celery worker    |
-    | processes events |
-    +------------------+
+            |         src/api/v1/         |
+            +------+------+---------------+
+                   |      |
+                   |      |
+          +--------v--+  +v----------+
+          | Transfer   |  | Read      |
+          | service    |  | endpoints |
+          | src/domains|  | (accounts,|
+          | /ledger/   |  | ledger    |
+          +-----+------+  | entries)  |
+                |         +-----------+
+                v
+    +-----------+---------------------------+
+    | PostgreSQL database                 |
+    | - Account                           |
+    | - LedgerEntry                       |
+    | - idempotency key / indexes         |
+    +-----------+---------------------------+
+                |
+                v
+    +-------------------------------+
+    | Webhook outbox                |
+    | src/domains/webhooks/         |
+    | - deferred delivery queue     |
+    | - retry / status tracking     |
+    +-------------------------------+
+                |
+                v
+    +-------------------------------+
+    | Celery worker                 |
+    | - process outbox records      |
+    | - send webhook events         |
+    +-------------------------------+
 ```
 
 ## Repository structure
