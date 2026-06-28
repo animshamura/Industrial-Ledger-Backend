@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  postgres-primary:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ledger_prod
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secure_password_here
+    volumes:
+      - postgres_primary_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ledger_prod"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: ./deploy/docker/django/Dockerfile.prod
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.base
+      - DB_HOST=postgres-primary
+      - DB_NAME=ledger_prod
+      - DB_USER=postgres
+      - DB_PASSWORD=secure_password_here
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery-worker:
+    build:
+      context: .
+      dockerfile: ./deploy/docker/django/Dockerfile.prod
+    command: celery -A config worker --loglevel=info -Q webhooks
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.base
+      - DB_HOST=postgres-primary
+      - DB_NAME=ledger_prod
+      - DB_USER=postgres
+      - DB_PASSWORD=secure_password_here
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_primary_data:
+  redis_data:
